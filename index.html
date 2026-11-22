@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Раскидки Mirage в CS2 с радаром, координатами и командами для тренировки.">
+  <meta name="theme-color" content="#141916">
+  <title>Mirage · Lineup Lab</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="./" aria-label="Lineup Lab, главная">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v5m0 10v5M2 12h5m10 0h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="5.25" stroke="currentColor" stroke-width="1.7"/></svg></span>
+        <span>Lineup Lab</span>
+      </a>
+      <button class="quiet-button" id="open-help" type="button">
+        <span class="help-icon" aria-hidden="true">?</span>
+        <span>Как тренироваться</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <div class="map-title"><h1 id="page-title">Mirage</h1><span class="map-code">de_mirage</span></div>
+        <p>Выбери цель и повтори раскид в тренировке CS2.</p>
+      </div>
+      <a class="quiet-button steam-link" href="steam://run/730">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Открыть CS2
+      </a>
+    </section>
+
+    <div class="workspace">
+      <section class="panel catalog" aria-labelledby="catalog-title">
+        <div class="catalog-head">
+          <div class="section-heading"><h2 id="catalog-title">Раскидки</h2><span class="count" id="result-count" aria-live="polite"></span></div>
+          <label class="search">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" stroke-width="1.7"/><path d="m15 15 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span class="sr-only">Поиск по старту или цели</span>
+            <input id="query" type="search" placeholder="Поиск по старту или цели" autocomplete="off">
+          </label>
+          <div class="filters">
+            <label><span class="sr-only">Тип гранаты</span><select id="type-filter"><option value="">Все гранаты</option><option value="smoke">Дым</option><option value="flash">Флешка</option><option value="molotov">Молотов</option><option value="he">Осколочная</option></select></label>
+            <label><span class="sr-only">Техника броска</span><select id="technique-filter"><option value="">Любой бросок</option><option value="stand">С места</option><option value="jump">В прыжке</option><option value="step">С шагом</option></select></label>
+          </div>
+          <label class="sort-control">Порядок
+            <select id="sort-order">
+              <option value="recommended">Проще повторить</option>
+              <option value="flight">Меньше время полёта</option>
+            </select>
+          </label>
+        </div>
+        <ul class="lineup-list" id="lineup-list" aria-label="Найденные раскидки"></ul>
+        <div class="list-empty" id="list-empty" hidden>
+          <p>Таких раскидок пока нет.</p>
+          <button class="text-button" id="reset-filters" type="button">Сбросить фильтры</button>
+        </div>
+      </section>
+
+      <section class="panel map-panel" aria-labelledby="radar-title">
+        <div class="panel-heading">
+          <h2 id="radar-title">Радар</h2>
+          <div class="zoom-controls" role="group" aria-label="Масштаб радара">
+            <button type="button" id="zoom-out" aria-label="Уменьшить масштаб">−</button>
+            <button type="button" id="zoom-reset" aria-label="Сбросить масштаб">1×</button>
+            <button type="button" id="zoom-in" aria-label="Увеличить масштаб">+</button>
+          </div>
+        </div>
+        <div class="radar-board">
+          <svg id="radar" viewBox="0 0 1024 1024" role="group" aria-label="Схема Mirage с точками броска">
+            <image href="./assets/mirage-radar.svg" width="1024" height="1024" pointer-events="none"></image>
+            <g id="radar-selection" aria-hidden="true" pointer-events="none"></g>
+            <g id="radar-markers"></g>
+          </svg>
+        </div>
+        <div class="map-footer">
+          <span><i class="legend-start" aria-hidden="true"></i> Старт</span>
+          <span><i class="legend-target" aria-hidden="true"></i> Цель</span>
+          <span class="legend-note">Линия связывает точки на схеме</span>
+        </div>
+      </section>
+
+      <section class="panel detail-panel" aria-labelledby="detail-title">
+        <div class="panel-heading"><h2 id="detail-title">Карточка броска</h2></div>
+        <div id="detail"></div>
+      </section>
+    </div>
+    <footer class="page-footer">Данные раскидок и источники указаны в карточках.</footer>
+  </main>
+
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="dialog-title"><h2 id="help-title">Как повторить раскид</h2><form method="dialog"><button class="close-button" aria-label="Закрыть" autofocus>×</button></form></div>
+    <ol class="help-steps">
+      <li>Открой CS2 и включи консоль разработчика в настройках игры.</li>
+      <li>Запусти локальную тренировку на Mirage. Из главного меню её также можно открыть командой <code>map de_mirage</code>.</li>
+      <li>В карточке нажми «Скопировать команду», вставь строку в консоль и нажми Enter. Команда выдаст гранату и выставит позицию и направление взгляда.</li>
+      <li>Закрой консоль, выбери полученную гранату и повтори указанный способ броска. Перед следующей попыткой вставь команду снова.</li>
+    </ol>
+    <p class="dialog-note">Для команды нужен локальный сервер с <code>sv_cheats 1</code>.</p>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
