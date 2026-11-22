@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Раскидки Mirage в CS2 с радаром, координатами и командами для тренировки.">
-  <meta name="theme-color" content="#141916">
+  <meta name="theme-color" content="#f5f8ff">
   <title>Mirage · Lineup Lab</title>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.js"></script>
@@ -27,7 +27,7 @@
     <section class="intro" aria-labelledby="page-title">
       <div>
         <div class="map-title"><h1 id="page-title">Mirage</h1><span class="map-code">de_mirage</span></div>
-        <p>Выбери цель и повтори раскид в тренировке CS2.</p>
+        <p>Поставь точку на карте и найди раскидку смока.</p>
       </div>
       <a class="quiet-button steam-link" href="steam://run/730">
         <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -35,10 +35,26 @@
       </a>
     </section>
 
+    <div class="map-toolbar">
+      <nav class="search-modes" aria-label="Режим работы с картой">
+        <button type="button" data-mode="start" aria-pressed="true">По старту</button>
+        <button type="button" data-mode="target" aria-pressed="false">По цели</button>
+        <button type="button" data-mode="catalog" aria-pressed="false">Каталог</button>
+      </nav>
+      <label class="side-control">Сторона
+        <select id="team-filter">
+          <option value="">Обе стороны</option>
+          <option value="T">T · Атака</option>
+          <option value="CT">CT · Защита</option>
+        </select>
+      </label>
+    </div>
+
     <div class="workspace">
       <section class="panel catalog" aria-labelledby="catalog-title">
         <div class="catalog-head">
           <div class="section-heading"><h2 id="catalog-title">Раскидки</h2><span class="count" id="result-count" aria-live="polite"></span></div>
+          <div id="catalog-controls">
           <label class="search">
             <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" stroke-width="1.7"/><path d="m15 15 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
             <span class="sr-only">Поиск по старту или цели</span>
@@ -54,10 +70,46 @@
               <option value="flight">Меньше время полёта</option>
             </select>
           </label>
+          </div>
+          <div id="point-controls" hidden>
+            <p class="point-hint" id="point-hint"></p>
+            <div class="point-info" id="point-info" hidden>
+              <strong id="point-coordinates"></strong>
+              <button class="text-button" id="clear-point" type="button">Убрать точку</button>
+            </div>
+            <label id="target-range-control" class="sort-control" hidden>Допуск по цели
+              <select id="target-range">
+                <option value="64">64 ед.</option>
+                <option value="112" selected>112 ед.</option>
+                <option value="180">180 ед.</option>
+              </select>
+            </label>
+            <details class="point-entry">
+              <summary>Ввести X и Y</summary>
+              <form id="point-form">
+                <label>X <input id="manual-x" type="number" step="any" required></label>
+                <label>Y <input id="manual-y" type="number" step="any" required></label>
+                <button type="submit">Применить</button>
+              </form>
+            </details>
+            <div class="filter-point-results" id="point-results-controls" hidden>
+              <label class="sort-control" id="floor-control" hidden>Высота
+                <select id="point-height"></select>
+              </label>
+              <label class="sort-control">Бросок
+                <select id="point-throw">
+                  <option value="">Любой</option>
+                  <option value="stand">С места</option>
+                  <option value="jump">В прыжке</option>
+                  <option value="step">С шагом</option>
+                </select>
+              </label>
+            </div>
+          </div>
         </div>
         <ul class="lineup-list" id="lineup-list" aria-label="Найденные раскидки"></ul>
         <div class="list-empty" id="list-empty" hidden>
-          <p>Таких раскидок пока нет.</p>
+          <p id="empty-message">Таких раскидок пока нет.</p>
           <button class="text-button" id="reset-filters" type="button">Сбросить фильтры</button>
         </div>
       </section>
@@ -73,7 +125,9 @@
         </div>
         <div class="radar-board">
           <svg id="radar" viewBox="0 0 1024 1024" role="group" aria-label="Схема Mirage с точками броска">
+            <rect width="1024" height="1024" fill="transparent" aria-hidden="true"></rect>
             <image href="./assets/mirage-radar.svg" width="1024" height="1024" pointer-events="none"></image>
+            <g id="radar-query" aria-hidden="true" pointer-events="none"></g>
             <g id="radar-selection" aria-hidden="true" pointer-events="none"></g>
             <g id="radar-markers"></g>
           </svg>
@@ -81,7 +135,7 @@
         <div class="map-footer">
           <span><i class="legend-start" aria-hidden="true"></i> Старт</span>
           <span><i class="legend-target" aria-hidden="true"></i> Цель</span>
-          <span class="legend-note">Линия связывает точки на схеме</span>
+          <span class="legend-note" id="legend-note">Линия связывает точки на схеме</span>
         </div>
       </section>
 
