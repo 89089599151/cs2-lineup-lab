@@ -138,7 +138,6 @@ export function querySmoke(atlas, { mode, point, team, radius, height, technique
   }
 
   const targetHeights = new Set();
-  let matchedShots = 0;
   indexes.forEach((index) => {
     const [origin, , , kind, strength, x, y, z, time] = atlas.rows[index];
     if (team && atlas.teams[origin] !== team) return;
@@ -157,7 +156,6 @@ export function querySmoke(atlas, { mode, point, team, radius, height, technique
       score = time;
       key = `${Math.floor(x / destinationGroup)}:${Math.floor(y / destinationGroup)}:${tier}:${kind}:${strength}`;
     }
-    matchedShots += 1;
     const current = group.get(key);
     if (!current || score < current.score || (score === current.score && time < current.time)) {
       group.set(key, { index, score, time });
@@ -169,7 +167,6 @@ export function querySmoke(atlas, { mode, point, team, radius, height, technique
   const matches = [...group.values()].sort((left, right) => left.score - right.score || left.time - right.time);
   return {
     matches: matches.map(({ index, score }) => asLineup(atlas, index, mode, score)),
-    matchedShots,
     heights,
     nearest,
     nearestDistance,
