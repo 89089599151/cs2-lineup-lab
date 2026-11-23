@@ -1,11 +1,15 @@
+import { mirageCatalog } from './data/mirage-catalog.js';
+import { mirageExtra } from './data/mirage-extra.js';
+
 const valveGuide = {
+  gameBuild: '26798866',
   sourceLabel: 'Valve',
   sourceUrl: 'https://www.counter-strike.net/newsentry/532126482488623353',
 };
 
 // Valve positions come from the main nodes in annotations/official/de_mirage/de_mirage.txt.
 // The aiming angles come from aim_target nodes. A missing destination is kept as null.
-export const lineups = [
+const baseLineups = [
   {
     ...valveGuide,
     id: 'mirage-window-t-spawn',
@@ -98,7 +102,9 @@ export const lineups = [
     target: 'Connector',
     type: 'flash',
     technique: 'step',
-    position: [-992.03125, -1304.832031, -95.527008],
+    position: [-992.03125, -1304.832031, -159.527008],
+    sourcePosition: [-992.03125, -1304.832031, -95.527008],
+    sourcePositionConvention: 'eye',
     angles: [-23.398115, -118.460068, 0],
     landing: [-697.896912, -1289.65503, -154.766998],
     instructions: 'После установки прицела сделай один быстрый шаг вперёд на W и брось ЛКМ на ходу, без прыжка.',
@@ -113,7 +119,9 @@ export const lineups = [
     target: 'Window',
     type: 'he',
     technique: 'step',
-    position: [502.968445, -677.147095, -96.669907],
+    position: [502.968445, -677.147095, -160.669907],
+    sourcePosition: [502.968445, -677.147095, -96.669907],
+    sourcePositionConvention: 'eye',
     angles: [-13.667566, 178.379562, 0],
     landing: [-1076.86304, -632.570862, -103.428024],
     instructions: 'После установки прицела пробеги два шага вперёд на W и брось ЛКМ на ходу, без прыжка.',
@@ -144,7 +152,9 @@ export const lineups = [
     target: 'CT',
     type: 'smoke',
     technique: 'jump',
-    position: [1087.041382, -1017.001282, -196.232117],
+    position: [1087.041382, -1017.001282, -260.232117],
+    sourcePosition: [1087.041382, -1017.001282, -196.232117],
+    sourcePositionConvention: 'eye',
     angles: [-29.216162, -143.676407, 0],
     landing: null,
     flightTime: 5.2,
@@ -160,7 +170,9 @@ export const lineups = [
     target: 'Under Balcony',
     type: 'molotov',
     technique: 'stand',
-    position: [-30.319885, -1418.061646, -104.057602],
+    position: [-30.319885, -1418.061646, -168.057602],
+    sourcePosition: [-30.319885, -1418.061646, -104.057602],
+    sourcePositionConvention: 'eye',
     angles: [-4.862072, -105.116974, 0],
     landing: [56.4874039, -2019.82373, -124.876976],
     instructions: 'Установи позицию и прицел, затем брось молотов ЛКМ с места.',
@@ -168,3 +180,37 @@ export const lineups = [
     sourceUrl: 'https://www.cs2util.com/mirage/molotov/under-balcony-molotov-from-tetris',
   },
 ];
+
+const baseDetails = {
+  'mirage-window-t-spawn': ['T', 'medium', 'choke', 'Прыжок с места', 'Второй элемент слева во внутреннем узоре ковра.', 'Перекрыть окно при атаке через мид.'],
+  'mirage-connector-t-spawn': ['T', 'medium', 'choke', 'Прыжок с места', 'Угол первой ступеньки внутреннего узора ковра.', 'Перекрыть обзор из коннектора для выхода на мид.'],
+  'mirage-cat-back-alley': ['T', 'easy', 'choke', 'С места', 'Угол здания у места броска.', 'Закрыть шорт со стороны дома.'],
+  'mirage-ct-outside-ramp': ['T', 'medium', 'execute', 'Прыжок с места', 'Середина деревянной балки.', 'Отрезать обзор с тикета при выходе на A.'],
+  'mirage-ramp-a-site': ['CT', 'easy', 'defense', 'С места', 'Место, где верх ящика упирается в здание.', 'Сдержать выход с ямы на A.'],
+  'mirage-apts-b-site': ['CT', 'easy', 'defense', 'С места', 'Угол металлического кронштейна.', 'Закрыть выход из ковров на B.'],
+  'mirage-connector-jungle-flash': ['CT', 'medium', 'defense', 'Один шаг на W', 'Кадр автора показывает исходное положение прицела.', 'Ослепить игрока, который выходит из коннектора.'],
+  'mirage-window-mid-boxes-he': ['T', 'medium', 'choke', 'Два шага на W', 'Кадр автора показывает исходное положение прицела.', 'Выбить соперника из окна гранатой.'],
+  'mirage-ninja-ramp-molotov': ['T', 'easy', 'execute', 'С места', 'Сверь угол с кадром автора от ямы.', 'Зачистить позицию ниндзя при выходе на A.'],
+  'mirage-ct-default-ramp': ['T', 'medium', 'execute', 'Прыжок с места', 'Сверь угол с кадром автора у внешней рампы.', 'Закрыть тикет для выхода на A.'],
+  'mirage-under-balcony-tetris-molotov': ['T', 'medium', 'execute', 'С места', 'Сверь исходный угол по кадру от тетриса.', 'Выкурить соперника из-под балкона.'],
+};
+
+const sourcedBaseLineups = baseLineups.map((entry) => {
+  const [side, difficulty, category, movement, aimCue, situation] = baseDetails[entry.id];
+  return {
+    sourceCheckedAt: '2026-11-23',
+    verification: 'source-verified',
+    gameBuild: null,
+    strength: 1,
+    positionConvention: 'feet',
+    ...entry,
+    side,
+    difficulty,
+    category,
+    movement,
+    aimCue,
+    situation,
+  };
+});
+
+export const lineups = [...sourcedBaseLineups, ...mirageCatalog, ...mirageExtra];
