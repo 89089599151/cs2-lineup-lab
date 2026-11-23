@@ -1,6 +1,5 @@
 import { mirageCatalog } from './data/mirage-catalog.js';
 import { mirageExtra } from './data/mirage-extra.js';
-import { mirageLiveChecks } from './data/mirage-live-checks.js';
 
 const valveGuide = {
   gameBuild: '26798866',
@@ -214,7 +213,4 @@ const sourcedBaseLineups = baseLineups.map((entry) => {
   };
 });
 
-export const lineups = [...sourcedBaseLineups, ...mirageCatalog, ...mirageExtra].map((lineup) => {
-  const observation = mirageLiveChecks[lineup.id];
-  return observation ? { ...lineup, ...observation, verification: 'in-game' } : lineup;
-});
+export const lineups = [...sourcedBaseLineups, ...mirageCatalog, ...mirageExtra];
