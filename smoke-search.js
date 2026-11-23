@@ -1,3 +1,4 @@
+import { assertAtlasQuality, isFloorCandidate } from './geometry-guard.js';
 const atlasPath = './assets/mirage-smokes.json.gz';
 const landingCell = 140;
 const destinationGroup = 96;
@@ -30,16 +31,23 @@ export function loadSmokeAtlas() {
     if (atlas.map !== 'de_mirage' || !atlas.origins.length || !atlas.rows.length || atlas.teams?.length !== atlas.origins.length) {
       throw new Error('Нет данных о бросках Mirage.');
     }
+    const qualityResponse = await fetch('./assets/mirage-atlas-quality.bin');
+    if (!qualityResponse.ok) throw new Error('Проверка поверхности Mirage недоступна.');
+    const quality = assertAtlasQuality(atlas, new Uint8Array(await qualityResponse.arrayBuffer()));
     const outcomes = atlas.origins.map(() => []);
     const targetGrid = new Map();
     atlas.rows.forEach((row, index) => {
       const [originIndex, , , , , x, y] = row;
       const key = gridKey(Math.floor(x / landingCell), Math.floor(y / landingCell));
-      if (!targetGrid.has(key)) targetGrid.set(key, []);
-      targetGrid.get(key).push(index);
+      // Store all outcome indexes so flight paths retain their original row alignment.
+      // Only floor-aligned candidates can enter the target search index.
+      if (isFloorCandidate(quality, index)) {
+        if (!targetGrid.has(key)) targetGrid.set(key, []);
+        targetGrid.get(key).push(index);
+      }
       outcomes[originIndex].push(index);
     });
-    return { ...atlas, outcomes, targetGrid };
+    return { ...atlas, outcomes, targetGrid, quality };
   }).catch((error) => {
     atlasRequest = undefined;
     throw error;
@@ -102,6 +110,8 @@ function asLineup(atlas, index, mode, score) {
     team: atlas.teams[origin],
     score,
     simulated: true,
+    simulationStatus: 'floor-aligned-unverified',
+    instructionsNote: 'Симуляция: совпадает с уровнем пола по NAV; траектория и раскрытие дыма в CS2 не подтверждены.',
     instructions: describeThrow(technique, strength),
     sourceLabel: 'CS2 Smoke Solver',
     sourceUrl: smokeSolverUrl,
@@ -139,6 +149,7 @@ export function querySmoke(atlas, { mode, point, team, radius, height, technique
 
   const targetHeights = new Set();
   indexes.forEach((index) => {
+    if (!isFloorCandidate(atlas.quality, index)) return;
     const [origin, , , kind, strength, x, y, z, time] = atlas.rows[index];
     if (team && atlas.teams[origin] !== team) return;
     if (technique && atlas.kinds[kind] !== technique) return;

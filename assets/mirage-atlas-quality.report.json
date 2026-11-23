@@ -1,0 +1,143 @@
+{
+  "map": "de_mirage",
+  "atlasBuild": "2000948",
+  "source": "de_mirage.nav (VPK)",
+  "navVersion": 36,
+  "navAreas": 2544,
+  "rowCount": 143779,
+  "classification": {
+    "0": "offNavUnknown",
+    "1": "floorAlignedCandidate",
+    "2": "wrongLevel"
+  },
+  "floorZTolerance": 28,
+  "counts": {
+    "0": 71309,
+    "1": 64939,
+    "2": 7531
+  },
+  "limitations": [
+    "NAV is not grenade collision geometry; landing floor alignment cannot prove a path misses roofs or walls.",
+    "Off-mesh smokes may be valid (boxes/ledges), but should not be advertised without game testing.",
+    "A trajectory that ends on a walkable floor may still obstruct the smoke effect."
+  ],
+  "sampleRows": {
+    "0": [
+      {
+        "row": 0,
+        "landing": [
+          -1061,
+          -734.9,
+          -262
+        ],
+        "time": 7,
+        "bounces": 8,
+        "knownFloors": []
+      },
+      {
+        "row": 4,
+        "landing": [
+          -1004,
+          593.8,
+          -78
+        ],
+        "time": 8.08,
+        "bounces": 5,
+        "knownFloors": []
+      },
+      {
+        "row": 10,
+        "landing": [
+          -695.2,
+          -56,
+          114
+        ],
+        "time": 7.28,
+        "bounces": 5,
+        "knownFloors": []
+      }
+    ],
+    "1": [
+      {
+        "row": 1,
+        "landing": [
+          -1100.9,
+          609.6,
+          -78
+        ],
+        "time": 6.69,
+        "bounces": 5,
+        "knownFloors": [
+          -76.0
+        ]
+      },
+      {
+        "row": 2,
+        "landing": [
+          -1010.8,
+          -748.4,
+          -262
+        ],
+        "time": 7.2,
+        "bounces": 6,
+        "knownFloors": [
+          -260.0
+        ]
+      },
+      {
+        "row": 3,
+        "landing": [
+          -975.3,
+          -544.2,
+          -286
+        ],
+        "time": 6.75,
+        "bounces": 7,
+        "knownFloors": [
+          -284.0
+        ]
+      }
+    ],
+    "2": [
+      {
+        "row": 8,
+        "landing": [
+          -695,
+          -1278.7,
+          114
+        ],
+        "time": 6.22,
+        "bounces": 5,
+        "knownFloors": [
+          -164.0
+        ]
+      },
+      {
+        "row": 12,
+        "landing": [
+          -622.9,
+          -1237.2,
+          114
+        ],
+        "time": 6.83,
+        "bounces": 5,
+        "knownFloors": [
+          -164.0
+        ]
+      },
+      {
+        "row": 32,
+        "landing": [
+          -2.9,
+          767.2,
+          306
+        ],
+        "time": 7.17,
+        "bounces": 5,
+        "knownFloors": [
+          -132.0
+        ]
+      }
+    ]
+  }
+}

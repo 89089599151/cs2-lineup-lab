@@ -1,8 +1,7 @@
 import { lineups } from './lineups.js';
-import { difficultyLabels, librarySmokesForTarget, mirageTargets, nearbyTarget, verificationLabels } from './catalog-search.js';
+import { difficultyLabels, isPublicLineup, mirageTargets, nearbyTarget, queryVerifiedSmokes, START_SNAP_RADIUS, verificationLabels } from './catalog-search.js';
 import { createMapViewport, MIRAGE_RADAR, radarToWorld, worldToRadar } from './map-viewport.js';
 import { practiceCommand } from './practice-command.js';
-import { loadFlightPath, loadSmokeAtlas, querySmoke, sideAt, strengthLabel } from './smoke-search.js';
 
 const grenadeTypes = {
   smoke: { label: 'Дым', icon: '<path d="M8 9h8v11H8zM10 9V6h4v3m-2-3V4h5m-8 9h6m-6 3h6"/>' },
@@ -34,7 +33,8 @@ const noLandingZones = {
   'B Apartments': [-1748, 784],
 };
 
-const byId = new Map(lineups.map((lineup) => [lineup.id, lineup]));
+const publicLineups = lineups.filter(isPublicLineup);
+const byId = new Map(publicLineups.map((lineup) => [lineup.id, lineup]));
 const get = (id) => document.getElementById(id);
 const query = get('query');
 const typeFilter = get('type-filter');
@@ -55,9 +55,21 @@ const rangeControl = get('target-range');
 const heightControl = get('point-height');
 const throwControl = get('point-throw');
 const modes = {
-  start: { title: 'Точки приземления', instruction: 'Выбери старт на карте' },
-  target: { title: 'Позиции броска', instruction: 'Выбери цель на карте' },
-  catalog: { title: 'Библиотека', instruction: 'Стартовые позиции' },
+  start: {
+    title: 'Точки приземления',
+    instruction: 'Выбери старт на карте',
+    empty: 'Нет проверенных смоков рядом с этим стартом. Выбери другую точку или смени сторону.',
+  },
+  target: {
+    title: 'Позиции броска',
+    instruction: 'Выбери цель на карте',
+    empty: 'Нет проверенных смоков в этом радиусе. Увеличь радиус или смени сторону.',
+  },
+  catalog: {
+    title: 'Библиотека',
+    instruction: 'Стартовые позиции',
+    empty: 'Нет проверенных смоков с этими фильтрами.',
+  },
 };
 
 let visible = [];
@@ -67,9 +79,7 @@ let toastTimer;
 let mode = 'start';
 let point = null;
 let height = null;
-let pointPhase = 'idle';
 let pointResults = null;
-let requestVersion = 0;
 
 const mapViewport = createMapViewport(radar, {
   overviewImage: radar.querySelector('image'),
@@ -99,13 +109,15 @@ function grenadeIcon(type) {
 }
 
 function updateCatalog() {
+  const smokeOnly = typeFilter.value === 'smoke';
+  verificationFilter.closest('label').hidden = smokeOnly;
+  if (smokeOnly) verificationFilter.value = '';
   const searchTerms = query.value.toLocaleLowerCase('ru').trim().split(/\s+/).filter(Boolean);
-  visible = lineups.filter((lineup) => {
+  visible = publicLineups.filter((lineup) => {
     const terms = [lineup.name, lineup.from, lineup.target, lineup.category, lineup.aimCue,
       grenadeTypes[lineup.type].label, techniques[lineup.technique]?.label]
       .join(' ').toLocaleLowerCase('ru');
-    const side = lineup.side ?? (lineup.position && sideAt(lineup.position));
-    return (!teamFilter.value || side === teamFilter.value)
+    return (!teamFilter.value || lineup.side === teamFilter.value)
       && (!difficultyFilter.value || lineup.difficulty === difficultyFilter.value)
       && (!verificationFilter.value || verificationOf(lineup) === verificationFilter.value)
       && (!typeFilter.value || lineup.type === typeFilter.value)
@@ -145,13 +157,12 @@ function renderResults() {
   const isCatalog = mode === 'catalog';
   if (!visible.some((lineup) => lineup.id === selectedId)) selectedId = visible[0]?.id ?? '';
   get('result-count').textContent = String(visible.length);
-  get('result-count').hidden = !isCatalog && pointPhase !== 'ready' && !visible.length;
-  get('list-empty').hidden = visible.length > 0 || (!isCatalog && pointPhase !== 'ready');
+  get('result-count').hidden = !isCatalog && !point;
+  get('list-empty').hidden = visible.length > 0 || (!isCatalog && !point);
   get('reset-filters').hidden = !isCatalog;
-  get('empty-message').textContent = isCatalog
+  get('empty-message').textContent = isCatalog && typeFilter.value !== 'smoke'
     ? 'Таких раскидок пока нет.'
-    : mode === 'target' ? 'Нет бросков. Попробуй увеличить радиус или сменить сторону.'
-      : 'Нет бросков. Выбери соседнюю точку или смени сторону.';
+    : modes[mode].empty;
   const selectedIndex = visible.findIndex((lineup) => lineup.id === selectedId);
   resultPage = Math.max(0, Math.floor(selectedIndex / pageSize));
   renderResultPage();
@@ -168,7 +179,7 @@ function renderResultPage() {
         ${grenadeIcon(lineup.type)}
         <span class="row-content">
           <span class="row-title">${safe(lineup.name)}</span>
-          <span class="row-meta">${safe(lineup.simulated ? resultMeta(lineup) : `${lineup.from} · ${techniques[lineup.technique]?.label ?? 'Техника в источнике'}`)}</span>
+          <span class="row-meta">${safe(resultMeta(lineup))}</span>
         </span>
         ${lineup.flightTime === undefined ? '' : `<span class="row-time">${safe(formatFlightTime(lineup.flightTime))}</span>`}
       </button>
@@ -207,8 +218,11 @@ function renderMarkers(isCatalog) {
 }
 
 function resultMeta(lineup) {
-  const distance = mode === 'target' ? ` · ${Math.round(lineup.score)} ед. от цели` : '';
-  return `${lineup.team} · ${techniques[lineup.technique].label} · ${strengthLabel(lineup.strength)}${distance}`;
+  const technique = techniques[lineup.technique]?.label ?? 'Техника в источнике';
+  const about = `${lineup.from} · ${technique}`;
+  if (!Number.isFinite(lineup.score) || lineup.score < 1) return about;
+  const endpoint = mode === 'target' ? 'цели' : 'точки';
+  return `${about} · ${Math.round(lineup.score)} ед. от ${endpoint}`;
 }
 
 function renderSelection() {
@@ -223,7 +237,7 @@ function renderSelection() {
     marker.setAttribute('tabindex', active ? '0' : '-1');
   });
 
-  const landing = lineup && (lineup.landing ?? noLandingZones[lineup.target]);
+  const landing = lineup && (lineup.landing ?? (lineup.type === 'smoke' ? null : noLandingZones[lineup.target]));
   selection.innerHTML = '';
   if (lineup?.position && landing) {
     const [x1, y1] = worldToRadar(lineup.position);
@@ -236,21 +250,6 @@ function renderSelection() {
   }
 
   get('legend-note').textContent = lineup?.position && landing ? 'Пунктир показывает направление' : '';
-  if (lineup?.simulated) {
-    const pathElement = selection.querySelector('.connection');
-    loadFlightPath(lineup).then((path) => {
-      if (!pathElement?.isConnected || path.length < 2) return;
-      pathElement.setAttribute('d', path.map((point, index) => {
-        const [x, y] = worldToRadar(point);
-        return `${index ? 'L' : 'M'}${x} ${y}`;
-      }).join(' '));
-      pathElement.classList.add('sim-flight');
-      get('legend-note').textContent = 'Траектория по расчёту';
-    }).catch(() => {
-      // Keep the schematic connector if the separate trajectory file is unavailable.
-    });
-  }
-
   renderPin();
   detailPanel.hidden = !lineup;
   if (!lineup) {
@@ -261,20 +260,19 @@ function renderSelection() {
   const command = practiceCommand(lineup);
   const technique = techniques[lineup.technique]?.label ?? 'Техника в источнике';
   const target = lineup.landing ? lineup.target : `${lineup.target} (зона)`;
-  const heading = lineup.simulated
-    ? (lineup.technique === 'jump' ? 'Смок в прыжке' : 'Смок с места')
-    : lineup.name;
-  const direction = lineup.simulated ? `${lineup.team} · к ${target}` : `${lineup.from} → ${target} · ${technique}`;
-  const status = lineup.simulated ? 'Симуляция' : verificationLabels[verificationOf(lineup)];
+  const direction = `${lineup.from} → ${target} · ${technique}`;
+  const status = verificationLabels[verificationOf(lineup)];
   const source = `<a href="${safe(lineup.sourceUrl)}" target="_blank" rel="noopener noreferrer">${safe(lineup.sourceLabel)}</a>`;
-  const sourceDate = lineup.sourceCheckedAt
-    ? ` · <time datetime="${safe(lineup.sourceCheckedAt)}">${safe(lineup.sourceCheckedAt.split('-').reverse().join('.'))}</time>`
+  const checkedAt = lineup.verifiedAt ?? lineup.sourceCheckedAt;
+  const sourceDate = checkedAt
+    ? ` · <time datetime="${safe(checkedAt)}">${safe(checkedAt.split('-').reverse().join('.'))}</time>`
     : '';
+  const build = lineup.verification === 'in-game' && lineup.gameBuild ? ` · сборка ${safe(lineup.gameBuild)}` : '';
   const copyIcon = icon('<rect x="8" y="7" width="11" height="13" rx="2"/><path d="M15 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2"/>');
   const linkIcon = icon('<path d="m10 13 4-4m-6 1-2 2a3.5 3.5 0 0 0 5 5l2-2m-2-6 2-2a3.5 3.5 0 0 1 5 5l-2 2"/>');
   detail.innerHTML = `
     <div class="shot-head">${grenadeIcon(lineup.type)}<div>
-      <h3 class="detail-title">${safe(heading)}</h3>
+      <h3 class="detail-title">${safe(lineup.name)}</h3>
       <p class="detail-from">${safe(direction)}</p>
     </div></div>
     <p class="instructions">${safe(lineup.instructions)}</p>
@@ -284,7 +282,6 @@ function renderSelection() {
       ${lineup.position ? `<div><dt>Старт X / Y / Z</dt><dd class="coordinates">${safe(displayVector(lineup.position))}</dd></div>` : ''}
       ${lineup.angles ? `<div><dt>Углы pitch / yaw</dt><dd class="coordinates">${safe(displayVector(lineup.angles.slice(0, 2)))}</dd></div>` : ''}
       ${lineup.flightTime === undefined ? '' : `<div><dt>Полёт</dt><dd>${safe(formatFlightTime(lineup.flightTime))}</dd></div>`}
-      ${lineup.simulated ? `<div><dt>Отскоки</dt><dd>${safe(lineup.bounces)}</dd></div>` : ''}
     </dl>
     ${command ? `<label class="sr-only" for="command">Команда для консоли CS2</label>
       <textarea class="command" id="command" readonly spellcheck="false" rows="2">${safe(command)}</textarea>`
@@ -293,7 +290,7 @@ function renderSelection() {
       ${command ? `<button class="action" type="button" data-action="copy-command">${copyIcon} Скопировать команду</button>` : ''}
       <button class="action secondary" type="button" data-action="copy-link" aria-label="Ссылка на раскид">${linkIcon} Ссылка</button>
     </div>
-    <p class="shot-source">${safe(status)} · ${source}${sourceDate}</p>
+    <p class="shot-source">${safe(status)} · ${source}${sourceDate}${build}</p>
   `;
 }
 
@@ -336,14 +333,16 @@ function readLink() {
   throwControl.value = '';
   rangeControl.value = '112';
 
-  if (fragment === 'catalog' || byId.has(fragment)) {
+  const oldShot = /^(mirage|sim)-[a-z0-9-]+$/i.test(fragment) && !byId.has(fragment);
+  if (fragment === 'catalog' || byId.has(fragment) || oldShot) {
     difficultyFilter.value = '';
     verificationFilter.value = '';
     query.value = '';
-    typeFilter.value = '';
+    typeFilter.value = byId.get(fragment)?.type ?? 'smoke';
     techniqueFilter.value = '';
     selectedId = byId.has(fragment) ? fragment : '';
-    changeMode('catalog');
+    changeMode('catalog', oldShot);
+    if (oldShot) notify('Эта раскидка сейчас недоступна.');
     return;
   }
 
@@ -358,8 +357,10 @@ function readLink() {
     if (['64', '112', '180'].includes(radius)) rangeControl.value = radius;
     const kind = params.get('throw');
     if (Object.hasOwn(techniques, kind)) throwControl.value = kind;
-    selectedId = params.get('shot') ?? '';
-    changeMode(routeMode);
+    const linkedShot = params.get('shot');
+    selectedId = byId.has(linkedShot) ? linkedShot : '';
+    changeMode(routeMode, Boolean(linkedShot && !selectedId));
+    if (linkedShot && !byId.has(linkedShot)) notify('Эта раскидка сейчас недоступна.');
     return;
   }
   changeMode('start');
@@ -378,7 +379,7 @@ function renderPin() {
     return;
   }
   const [x, y] = worldToRadar(point);
-  const radius = mode === 'target' ? Number(rangeControl.value) / MIRAGE_RADAR.unitsPerPixel : 17;
+  const radius = (mode === 'target' ? Number(rangeControl.value) : START_SNAP_RADIUS) / MIRAGE_RADAR.unitsPerPixel;
   const icon = mode === 'target' ? 'M-7 0H7M0-7V7' : 'M0 -6 6 0 0 6 -6 0Z';
   layer.innerHTML = `<g class="query-pin" transform="translate(${x} ${y})">
     <circle class="query-range" r="${radius}"></circle>
@@ -407,76 +408,46 @@ function renderMode() {
   get('point-controls').hidden = isCatalog;
   get('point-info').hidden = !point;
   get('target-range-control').hidden = mode !== 'target';
-  get('library-techniques').hidden = mode !== 'target';
-  if (mode === 'start' && !['', 'stand', 'jump'].includes(throwControl.value)) throwControl.value = '';
-  get('point-results-controls').hidden = pointPhase !== 'ready';
+  get('point-results-controls').hidden = !point;
   get('floor-control').hidden = !pointResults || pointResults.heights.length < 2;
   radar.classList.toggle('clickable-radar', !isCatalog);
   if (isCatalog) return;
 
   let hint = '';
-  if (pointPhase === 'loading') hint = 'Загрузка траекторий…';
-  if (pointPhase === 'error') hint = 'Траектории недоступны. Выбери точку ещё раз.';
-  if (pointPhase === 'ready' && mode === 'start' && !pointResults.nearest) {
-    hint = 'Рядом нет рассчитанного старта для этой стороны.';
-  } else if (pointPhase === 'ready') {
-    if (mode === 'start') {
-      const [x, y, z] = pointResults.nearest.map(Math.round);
-      hint = `Ближайший старт ${x} / ${y} / ${z} · ${Math.round(pointResults.nearestDistance)} ед. от точки`;
-    }
+  if (mode === 'start' && pointResults?.nearest) {
+    const [x, y, z] = pointResults.nearest.map(Math.round);
+    hint = `Ближайший проверенный старт ${x} / ${y} / ${z} · ${Math.round(pointResults.nearestDistance)} ед. от точки`;
   }
   get('point-hint').textContent = hint;
   get('point-hint').hidden = !hint;
   if (point) get('point-coordinates').textContent = `${mode === 'start' ? 'Старт' : 'Цель'} ${point[0]} / ${point[1]}`;
 
   const allHeights = [...(pointResults?.heights ?? [])];
-  const defaultHeight = mode === 'start' ? 'Ближайшая' : 'Любая';
-  heightControl.innerHTML = `<option value="">${defaultHeight}</option>`
+  heightControl.innerHTML = '<option value="">Любая</option>'
     + allHeights.map((entry) => `<option value="${entry}">Около Z ${entry}</option>`).join('');
   heightControl.value = allHeights.includes(height) ? String(height) : '';
 }
 
-async function updatePointSearch({ updateAddress = false } = {}) {
-  const version = ++requestVersion;
-  pointResults = null;
-  pointPhase = point ? 'loading' : 'idle';
-  visible = [];
-  renderMode();
-  if (!point) {
-    renderResults();
-    if (updateAddress) history.replaceState(null, '', lineupUrl(''));
-    return;
-  }
-  // Keep a linked selection while the index loads.
-  const linkedShot = selectedId;
-  renderResults();
-  selectedId = linkedShot;
-  if (updateAddress) history.replaceState(null, '', lineupUrl(''));
+function updatePointSearch({ updateAddress = false } = {}) {
   const options = {
     mode, point, height,
     team: teamFilter.value,
     radius: Number(rangeControl.value),
     technique: throwControl.value,
   };
-  const known = mode === 'target' ? librarySmokesForTarget(lineups, options) : [];
-  try {
-    const atlas = await loadSmokeAtlas();
-    if (version !== requestVersion) return;
-    pointResults = querySmoke(atlas, options);
-    visible = [...known, ...pointResults.matches];
-    pointPhase = 'ready';
-  } catch {
-    if (version !== requestVersion) return;
-    visible = known;
-    pointPhase = 'error';
+  pointResults = point ? queryVerifiedSmokes(publicLineups, options) : null;
+  if (pointResults && height !== null && !pointResults.heights.includes(height)) {
+    height = null;
+    pointResults = queryVerifiedSmokes(publicLineups, { ...options, height });
   }
+  visible = pointResults?.matches ?? [];
   renderMode();
   renderResults();
+  if (updateAddress) history.replaceState(null, '', lineupUrl(''));
 }
 
 function changeMode(nextMode, updateAddress = false) {
   mode = nextMode;
-  requestVersion += 1;
   if (mode === 'catalog') {
     renderMode();
     updateCatalog();

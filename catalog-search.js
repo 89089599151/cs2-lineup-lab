@@ -23,18 +23,37 @@ export function nearbyTarget(point) {
   return mirageTargets.find((target) => planeDistance(point, target.point) <= 96) ?? null;
 }
 
-export function librarySmokesForTarget(lineups, { point, team, technique, radius, height }) {
-  const target = nearbyTarget(point);
-  return lineups.filter((lineup) => {
-    if (lineup.type !== 'smoke' || (team && lineup.side !== team)
-      || (technique && lineup.technique !== technique)) return false;
 
-    if (lineup.landing) {
-      const sameHeight = height === null || Math.round(lineup.landing[2] / 64) * 64 === height;
-      return sameHeight && planeDistance(point, lineup.landing) <= radius;
-    }
+export const START_SNAP_RADIUS = 128;
 
-    // A source can confirm the named target while omitting its exact landing.
-    return height === null && Boolean(target) && lineup.target === target.target;
-  });
+const isPoint = (point) => Array.isArray(point) && point.length === 3 && point.every(Number.isFinite);
+const layer = (z) => Math.round(z / 64) * 64;
+
+export function isPublicLineup(lineup) {
+  return !lineup.simulated && (lineup.type !== 'smoke' || lineup.verification === 'in-game');
+}
+
+export function queryVerifiedSmokes(lineups, { mode, point, team, technique, radius = 112, height = null }) {
+  const fromStart = mode === 'start';
+  const end = fromStart ? 'position' : 'landing';
+  const maxDistance = fromStart ? START_SNAP_RADIUS : radius;
+  const nearby = lineups.filter((lineup) =>
+    lineup.type === 'smoke' && isPublicLineup(lineup)
+    && isPoint(lineup.position) && isPoint(lineup.landing)
+    && (!team || lineup.side === team)
+    && (!technique || lineup.technique === technique)
+  ).map((lineup) => ({ ...lineup, score: planeDistance(point, lineup[end]) }))
+    .filter((lineup) => lineup.score <= maxDistance)
+    .sort((a, b) => a.score - b.score);
+
+  const heights = [...new Set(nearby.map((lineup) => layer(lineup[end][2])))].sort((a, b) => a - b);
+  const matches = height === null ? nearby : nearby.filter((lineup) => layer(lineup[end][2]) === height);
+  const nearest = fromStart ? matches[0] : undefined;
+
+  return {
+    matches,
+    heights,
+    nearest: nearest?.position ?? null,
+    nearestDistance: nearest?.score ?? Infinity,
+  };
 }
