@@ -46,6 +46,8 @@ const markers = get('radar-markers');
 const selection = get('radar-selection');
 const detail = get('detail');
 const detailPanel = detail.closest('.detail-panel');
+const mapCommand = get('map-command');
+const compactLayout = window.matchMedia('(max-width: 730px)');
 const difficultyFilter = get('difficulty-filter');
 const verificationFilter = get('verification-filter');
 const quickTargets = get('quick-targets');
@@ -112,6 +114,10 @@ function updateCatalog() {
   const smokeOnly = typeFilter.value === 'smoke';
   verificationFilter.closest('label').hidden = smokeOnly;
   if (smokeOnly) verificationFilter.value = '';
+  const extraFilters = [difficultyFilter.value, verificationFilter.value, sortOrder.value !== 'recommended'].filter(Boolean).length;
+  const extraFilterCount = get('extra-filter-count');
+  extraFilterCount.hidden = extraFilters === 0;
+  extraFilterCount.textContent = extraFilters;
   const searchTerms = query.value.toLocaleLowerCase('ru').trim().split(/\s+/).filter(Boolean);
   visible = publicLineups.filter((lineup) => {
     const terms = [lineup.name, lineup.from, lineup.target, lineup.category, lineup.aimCue,
@@ -254,6 +260,7 @@ function renderSelection() {
   get('legend-note').textContent = lineup?.position && landing ? 'Пунктир показывает направление' : '';
   renderPin();
   detailPanel.hidden = !lineup;
+  mapCommand.hidden = !lineup;
   if (!lineup) {
     detail.replaceChildren();
     return;
@@ -280,19 +287,22 @@ function renderSelection() {
     <p class="instructions">${safe(lineup.instructions)}</p>
     ${lineup.aimCue ? `<p class="instructions"><strong>Ориентир</strong> ${safe(lineup.aimCue)}</p>` : ''}
     ${lineup.difficulty ? `<p class="instructions">${safe(difficultyLabels[lineup.difficulty])}${lineup.side ? ` · ${safe(lineup.side)}` : ''}</p>` : ''}
-    <dl class="data-list">
-      ${lineup.position ? `<div><dt>Старт X / Y / Z</dt><dd class="coordinates">${safe(displayVector(lineup.position))}</dd></div>` : ''}
-      ${lineup.type === 'smoke' ? `<div><dt>Раскрытие X / Y / Z</dt><dd class="coordinates">${safe(displayVector(lineup.landing))}</dd></div>` : ''}
-      ${lineup.angles ? `<div><dt>Углы pitch / yaw</dt><dd class="coordinates">${safe(displayVector(lineup.angles.slice(0, 2)))}</dd></div>` : ''}
-      ${lineup.flightTime === undefined ? '' : `<div><dt>Полёт</dt><dd>${safe(formatFlightTime(lineup.flightTime))}</dd></div>`}
-    </dl>
     ${command ? `<label class="sr-only" for="command">Команда для консоли CS2</label>
-      <textarea class="command" id="command" readonly spellcheck="false" rows="2">${safe(command)}</textarea>`
+      <textarea class="command" id="command" readonly spellcheck="false" rows="3">${safe(command)}</textarea>`
       : '<p class="instructions">Для этой раскидки пока нет точных данных для команды.</p>'}
     <div class="shot-actions">
-      ${command ? `<button class="action" type="button" data-action="copy-command">${copyIcon} Скопировать команду</button>` : ''}
+      ${command ? `<button class="action" type="button" data-action="copy-command">${copyIcon} Копировать команду</button>` : ''}
       <button class="action secondary" type="button" data-action="copy-link" aria-label="Ссылка на раскид">${linkIcon} Ссылка</button>
     </div>
+    ${lineup.position || lineup.landing || lineup.angles || lineup.flightTime !== undefined ? `<details class="shot-data">
+      <summary>Координаты и углы</summary>
+      <dl class="data-list">
+        ${lineup.position ? `<div><dt>Старт X / Y / Z</dt><dd class="coordinates">${safe(displayVector(lineup.position))}</dd></div>` : ''}
+        ${lineup.landing ? `<div><dt>Раскрытие X / Y / Z</dt><dd class="coordinates">${safe(displayVector(lineup.landing))}</dd></div>` : ''}
+        ${lineup.angles ? `<div><dt>Углы pitch / yaw</dt><dd class="coordinates">${safe(displayVector(lineup.angles.slice(0, 2)))}</dd></div>` : ''}
+        ${lineup.flightTime === undefined ? '' : `<div><dt>Полёт</dt><dd>${safe(formatFlightTime(lineup.flightTime))}</dd></div>`}
+      </dl>
+    </details>` : ''}
     <p class="shot-source">${safe(status)} · ${source}${sourceDate}${build}</p>
   `;
 }
@@ -510,16 +520,23 @@ get('reset-filters').addEventListener('click', () => {
   teamFilter.value = '';
   difficultyFilter.value = '';
   verificationFilter.value = '';
+  sortOrder.value = 'recommended';
   updateCatalog();
   query.focus();
 });
 
 document.querySelectorAll('[data-mode]').forEach((button) => {
   button.addEventListener('click', () => {
-    if (button.dataset.mode === mode) return;
-    selectedId = '';
-    height = null;
-    changeMode(button.dataset.mode, true);
+    const nextMode = button.dataset.mode;
+    if (nextMode !== mode) {
+      selectedId = '';
+      height = null;
+      changeMode(nextMode, true);
+    }
+    if (compactLayout.matches) {
+      const panel = nextMode === 'catalog' ? list.closest('.catalog') : radar.closest('.map-panel');
+      panel.scrollIntoView({ block: 'start' });
+    }
   });
 });
 
@@ -619,6 +636,10 @@ get('next-results').addEventListener('click', () => {
   renderResultPage();
 });
 get('open-help').addEventListener('click', () => get('help-dialog').showModal());
+mapCommand.addEventListener('click', () => {
+  detail.focus({ preventScroll: true });
+  detail.scrollIntoView({ block: 'start' });
+});
 
 detail.addEventListener('click', (event) => {
   const action = event.target.closest('[data-action]')?.dataset.action;

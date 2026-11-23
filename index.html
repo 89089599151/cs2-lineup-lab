@@ -2,9 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Проверенные в CS2 смоки Mirage с радаром, координатами и командами для тренировки.">
-  <meta name="theme-color" content="#f2f5fa">
+  <meta name="theme-color" content="#101110">
   <title>Mirage · Lineup Lab</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -18,9 +18,7 @@
         <span>Lineup Lab</span>
       </a>
       <div class="header-actions">
-        <button class="quiet-button" id="open-help" type="button">
-          <span>Практика</span>
-        </button>
+        <button class="quiet-button" id="open-help" type="button">Как бросить</button>
         <a class="quiet-button steam-link" href="steam://run/730">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Открыть CS2
@@ -33,33 +31,41 @@
     <div class="workbench">
       <div class="workbench-head">
         <h1>Mirage</h1>
-        <div class="map-toolbar">
-          <nav class="search-modes" aria-label="Режим работы с картой">
-            <button type="button" data-mode="start" aria-pressed="false">По старту</button>
-            <button type="button" data-mode="target" aria-pressed="false">По цели</button>
-            <button type="button" data-mode="catalog" aria-pressed="true">Каталог</button>
-          </nav>
-          <label class="side-control"><span class="side-label">Сторона</span>
-            <select id="team-filter">
-              <option value="">Обе стороны</option>
-              <option value="T">T (атака)</option>
-              <option value="CT">CT (защита)</option>
-            </select>
-          </label>
-        </div>
+        <nav class="search-modes" aria-label="Режим работы с картой">
+          <button type="button" data-mode="start" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/></svg>
+            По старту
+          </button>
+          <button type="button" data-mode="target" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 3v4m0 10v4M3 12h4m10 0h4"/></svg>
+            По цели
+          </button>
+          <button type="button" data-mode="catalog" aria-pressed="true">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 6h8"/></svg>
+            Каталог
+          </button>
+        </nav>
+        <label class="side-control"><span class="sr-only">Сторона</span>
+          <select id="team-filter">
+            <option value="">Обе стороны</option>
+            <option value="T">T · Атака</option>
+            <option value="CT">CT · Защита</option>
+          </select>
+        </label>
       </div>
       <div class="workspace">
         <section class="map-panel" aria-labelledby="radar-title">
           <div class="map-head">
-            <h2 class="sr-only" id="radar-title">Радар Mirage</h2>
-            <p id="map-instruction">Выбери старт на карте</p>
+            <div class="map-heading">
+              <h2 id="radar-title">Радар</h2>
+              <p id="map-instruction">Стартовые позиции</p>
+            </div>
             <div class="zoom-controls" role="group" aria-label="Масштаб радара">
               <button type="button" id="zoom-out" aria-label="Уменьшить масштаб">−</button>
               <button type="button" id="zoom-reset" aria-label="Сбросить масштаб">1×</button>
               <button type="button" id="zoom-in" aria-label="Увеличить масштаб">+</button>
             </div>
           </div>
-          <div class="map-targets" id="quick-targets" aria-label="Цели Mirage"></div>
           <div class="radar-board">
             <svg id="radar" tabindex="0" viewBox="0 0 1024 1024" role="group" aria-label="Схема Mirage с точками броска">
               <rect width="1024" height="1024" fill="transparent" aria-hidden="true"></rect>
@@ -74,10 +80,12 @@
               <g id="radar-markers"></g>
             </svg>
           </div>
+          <div class="map-targets" id="quick-targets" role="group" aria-label="Цели Mirage"></div>
           <div class="map-footer">
             <span><i class="legend-start" aria-hidden="true"></i> Старт</span>
             <span><i class="legend-target" aria-hidden="true"></i> Цель</span>
             <span class="legend-note" id="legend-note"></span>
+            <button class="map-command" id="map-command" type="button" aria-controls="detail" hidden>К броску <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></button>
             <details class="map-settings">
               <summary>Карта</summary>
               <div class="map-options">
@@ -89,30 +97,32 @@
             </details>
           </div>
         </section>
-        <aside class="inspector" aria-label="Поиск и параметры броска">
-          <section class="catalog" aria-labelledby="catalog-title">
+        <section class="catalog" aria-labelledby="catalog-title">
             <div class="catalog-head">
               <div class="section-heading"><h2 id="catalog-title">Раскидки</h2><span class="count" id="result-count" aria-live="polite"></span></div>
               <div id="catalog-controls">
                 <label class="search">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" stroke="currentColor" stroke-width="1.7"/><path d="m15 15 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                   <span class="sr-only">Поиск по старту или цели</span>
-                  <input id="query" type="search" placeholder="Поиск по старту или цели" autocomplete="off">
+                  <input id="query" type="search" placeholder="Старт или цель" autocomplete="off">
                 </label>
                 <div class="filters">
                   <label><span class="sr-only">Тип гранаты</span><select id="type-filter"><option value="">Все гранаты</option><option value="smoke" selected>Дым</option><option value="flash">Флешка</option><option value="molotov">Молотов</option><option value="he">Осколочная</option></select></label>
-                  <label><span class="sr-only">Техника броска</span><select id="technique-filter"><option value="">Любой бросок</option><option value="stand">С места</option><option value="jump">В прыжке</option><option value="step">С шагом</option><option value="run">С разбега</option><option value="walk">На тихом ходу</option><option value="crouch">В приседе</option><option value="runjump">Прыжок с разбега</option><option value="walkjump">Прыжок с тихого хода</option><option value="crouchwalkjump">Прыжок после шага в приседе</option></select></label>
+                  <label><span class="sr-only">Техника броска</span><select id="technique-filter"><option value="">Все броски</option><option value="stand">С места</option><option value="jump">В прыжке</option><option value="step">С шагом</option><option value="run">С разбега</option><option value="walk">На тихом ходу</option><option value="crouch">В приседе</option><option value="runjump">Прыжок с разбега</option><option value="walkjump">Прыжок с тихого хода</option><option value="crouchwalkjump">Прыжок после шага в приседе</option></select></label>
                 </div>
-                <div class="filters">
-                <label><span class="sr-only">Сложность</span><select id="difficulty-filter"><option value="">Любая сложность</option><option value="easy">Простой</option><option value="medium">Средний</option><option value="hard">Сложный</option></select></label>
-                <label><span class="sr-only">Подтверждение</span><select id="verification-filter"><option value="">Любой статус</option><option value="in-game">Проверено в CS2</option><option value="source-verified">Есть источник</option><option value="unconfirmed">Нужна проверка</option></select></label>
-              </div>
-              <label class="sort-control">Порядок
-                  <select id="sort-order">
-                    <option value="recommended">Проще повторить</option>
-                    <option value="flight">Быстрее долетит</option>
-                  </select>
-                </label>
+                <details class="extra-filters">
+                  <summary>Доп. фильтры <span id="extra-filter-count" hidden></span></summary>
+                  <div class="filters">
+                    <label><span class="sr-only">Сложность</span><select id="difficulty-filter"><option value="">Любая сложность</option><option value="easy">Простой</option><option value="medium">Средний</option><option value="hard">Сложный</option></select></label>
+                    <label><span class="sr-only">Подтверждение</span><select id="verification-filter"><option value="">Любой статус</option><option value="in-game">Проверено в CS2</option><option value="source-verified">Есть источник</option><option value="unconfirmed">Нужна проверка</option></select></label>
+                  </div>
+                  <label class="sort-control">Порядок
+                    <select id="sort-order">
+                      <option value="recommended">Проще повторить</option>
+                      <option value="flight">Быстрее долетит</option>
+                    </select>
+                  </label>
+                </details>
               </div>
               <div id="point-controls" hidden>
                 <p class="point-hint" id="point-hint" role="status" hidden></p>
@@ -166,12 +176,11 @@
               <p id="empty-message">Таких раскидок пока нет.</p>
               <button class="text-button" id="reset-filters" type="button">Сбросить фильтры</button>
             </div>
-          </section>
-          <section class="detail-panel" aria-labelledby="detail-title" hidden>
-            <h2 id="detail-title" class="sr-only">Параметры броска</h2>
-            <div id="detail"></div>
-          </section>
-        </aside>
+        </section>
+        <section class="detail-panel" aria-labelledby="detail-title" hidden>
+          <h2 id="detail-title" class="sr-only">Параметры броска</h2>
+          <div id="detail" tabindex="-1"></div>
+        </section>
       </div>
     </div>
   </main>
