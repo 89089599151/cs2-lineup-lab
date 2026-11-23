@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Раскидки Mirage в CS2 с радаром, координатами и командами для тренировки.">
+  <meta name="description" content="Проверенные в CS2 смоки Mirage с радаром, координатами и командами для тренировки.">
   <meta name="theme-color" content="#f2f5fa">
   <title>Mirage · Lineup Lab</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
@@ -35,9 +35,9 @@
         <h1>Mirage</h1>
         <div class="map-toolbar">
           <nav class="search-modes" aria-label="Режим работы с картой">
-            <button type="button" data-mode="start" aria-pressed="true">По старту</button>
+            <button type="button" data-mode="start" aria-pressed="false">По старту</button>
             <button type="button" data-mode="target" aria-pressed="false">По цели</button>
-            <button type="button" data-mode="catalog" aria-pressed="false">Каталог</button>
+            <button type="button" data-mode="catalog" aria-pressed="true">Каталог</button>
           </nav>
           <label class="side-control"><span class="side-label">Сторона</span>
             <select id="team-filter">
@@ -100,7 +100,7 @@
                   <input id="query" type="search" placeholder="Поиск по старту или цели" autocomplete="off">
                 </label>
                 <div class="filters">
-                  <label><span class="sr-only">Тип гранаты</span><select id="type-filter"><option value="">Все гранаты</option><option value="smoke">Дым</option><option value="flash">Флешка</option><option value="molotov">Молотов</option><option value="he">Осколочная</option></select></label>
+                  <label><span class="sr-only">Тип гранаты</span><select id="type-filter"><option value="">Все гранаты</option><option value="smoke" selected>Дым</option><option value="flash">Флешка</option><option value="molotov">Молотов</option><option value="he">Осколочная</option></select></label>
                   <label><span class="sr-only">Техника броска</span><select id="technique-filter"><option value="">Любой бросок</option><option value="stand">С места</option><option value="jump">В прыжке</option><option value="step">С шагом</option><option value="run">С разбега</option><option value="walk">На тихом ходу</option><option value="crouch">В приседе</option><option value="runjump">Прыжок с разбега</option><option value="walkjump">Прыжок с тихого хода</option><option value="crouchwalkjump">Прыжок после шага в приседе</option></select></label>
                 </div>
                 <div class="filters">
@@ -144,7 +144,13 @@
                       <option value="">Любой</option>
                       <option value="stand">С места</option>
                       <option value="jump">В прыжке</option>
-                    <optgroup id="library-techniques" label="Из библиотеки"><option value="step">С шагом</option><option value="run">С разбега</option><option value="walk">На тихом ходу</option><option value="crouch">В приседе</option><option value="runjump">Прыжок с разбега</option><option value="walkjump">Прыжок с тихого хода</option><option value="crouchwalkjump">Прыжок после шага в приседе</option></optgroup>
+                      <option value="step">С шагом</option>
+                      <option value="run">С разбега</option>
+                      <option value="walk">На тихом ходу</option>
+                      <option value="crouch">В приседе</option>
+                      <option value="runjump">Прыжок с разбега</option>
+                      <option value="walkjump">Прыжок с тихого хода</option>
+                      <option value="crouchwalkjump">Прыжок после шага в приседе</option>
                     </select>
                   </label>
                 </div>
