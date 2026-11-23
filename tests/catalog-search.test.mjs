@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lineups } from '../lineups.js';
-import { isPublicLineup, nearbyTarget, queryVerifiedSmokes, walkableHeightsAt } from '../catalog-search.js';
+import { isPlayableMiragePoint, isPublicLineup, mirageTargets, nearbyTarget, queryVerifiedSmokes, walkableHeightsAt } from '../catalog-search.js';
 
 const window = lineups.find((lineup) => lineup.id === 'mirage-window-smoke-from-cart8');
 const verified = { ...window, id: 'verified' };
@@ -15,6 +15,20 @@ const start = { ...options, mode: 'start', point: [verified.position[0] + 20, ve
 test('recognizes the Window anchor without treating the whole map as Window', () => {
   assert.equal(nearbyTarget(target.point).id, 'window');
   assert.equal(nearbyTarget([-2000, 1200]), null);
+});
+
+test('a Mirage point requires an occupied VPK-derived navigation cell', () => {
+  assert.equal(isPlayableMiragePoint([1279, -15]), true);
+  assert.equal(isPlayableMiragePoint([1279, -15, -168]), true);
+  for (const { id, point } of mirageTargets) assert.equal(isPlayableMiragePoint(point), true, id);
+
+  assert.equal(isPlayableMiragePoint([0, 0]), false, 'blank space inside the original radar rectangle');
+  assert.equal(isPlayableMiragePoint([770, -287]), false, 'enclosed area without a playable surface');
+  assert.equal(isPlayableMiragePoint([1620, -2750]), false, 'outside the navigation bounds');
+  assert.equal(isPlayableMiragePoint([NaN, -15]), false);
+  assert.equal(isPlayableMiragePoint([1279, Infinity]), false);
+  assert.equal(isPlayableMiragePoint(['1279', '-15']), false);
+  assert.equal(isPlayableMiragePoint(null), false);
 });
 
 test('public smoke requires matching build, game evidence and a playable landing', () => {

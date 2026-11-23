@@ -1,5 +1,6 @@
 import { lineups } from './lineups.js';
-import { difficultyLabels, isPublicLineup, mirageTargets, nearbyTarget, queryVerifiedSmokes, START_SNAP_RADIUS, verificationLabels } from './catalog-search.js';
+import { isCalculatedSmokeId, loadCalculatedSmokes } from './calculated-smokes.js?v=3';
+import { difficultyLabels, isPlayableMiragePoint, isPublicLineup, mirageTargets, nearbyTarget, queryMirageSmokes, START_SNAP_RADIUS, verificationLabels } from './catalog-search.js?v=3';
 import { createMapViewport, MIRAGE_RADAR, radarToWorld, worldToRadar } from './map-viewport.js';
 import { practiceCommand } from './practice-command.js';
 
@@ -60,12 +61,12 @@ const modes = {
   start: {
     title: 'Точки приземления',
     instruction: 'Выбери старт на карте',
-    empty: 'Нет проверенных смоков рядом с этим стартом. Выбери другую точку или смени сторону.',
+    empty: 'Нет смоков рядом с этим стартом. Выбери другую точку или смени сторону.',
   },
   target: {
     title: 'Позиции броска',
     instruction: 'Выбери цель на карте',
-    empty: 'Нет проверенных смоков в этом радиусе. Увеличь радиус или смени сторону.',
+    empty: 'Нет смоков в этом радиусе. Увеличь радиус или смени сторону.',
   },
   catalog: {
     title: 'Библиотека',
@@ -82,6 +83,9 @@ let mode = 'catalog';
 let point = null;
 let height = null;
 let pointResults = null;
+let calculatedSmokes = null;
+let calculationsLoading = false;
+let calculationsFailed = false;
 
 const mapViewport = createMapViewport(radar, {
   overviewImage: radar.querySelector('image'),
@@ -161,10 +165,11 @@ function selectedLineup() {
 
 function renderResults() {
   const isCatalog = mode === 'catalog';
-  if (!visible.some((lineup) => lineup.id === selectedId)) selectedId = visible[0]?.id ?? '';
+  const waitingForShot = !isCatalog && calculationsLoading && isCalculatedSmokeId(selectedId);
+  if (!waitingForShot && !visible.some((lineup) => lineup.id === selectedId)) selectedId = visible[0]?.id ?? '';
   get('result-count').textContent = String(visible.length);
-  get('result-count').hidden = !isCatalog && !point;
-  get('list-empty').hidden = visible.length > 0 || (!isCatalog && !point);
+  get('result-count').hidden = !isCatalog && (!point || (calculationsLoading && visible.length === 0));
+  get('list-empty').hidden = visible.length > 0 || (!isCatalog && (!point || calculationsLoading || calculationsFailed));
   get('reset-filters').hidden = !isCatalog;
   get('empty-message').textContent = isCatalog && typeFilter.value !== 'smoke'
     ? 'Таких раскидок пока нет.'
@@ -202,7 +207,8 @@ function renderResultPage() {
 
 function renderMarkers(isCatalog) {
   const positions = new Map();
-  visible.forEach((lineup) => {
+  const page = visible.slice(resultPage * pageSize, (resultPage + 1) * pageSize);
+  page.forEach((lineup) => {
     const position = mode === 'start' ? lineup.landing : lineup.position;
     if (!position) return;
     const [x, y] = worldToRadar(position);
@@ -227,7 +233,8 @@ function renderMarkers(isCatalog) {
 
 function resultMeta(lineup) {
   const technique = techniques[lineup.technique]?.label ?? 'Техника в источнике';
-  const about = `${lineup.from} · ${technique}`;
+  const status = lineup.verification === 'geometry-calculated' ? ' · Расчёт по карте' : '';
+  const about = `${lineup.from} · ${technique}${status}`;
   if (!Number.isFinite(lineup.score) || lineup.score < 1) return about;
   const endpoint = mode === 'target' ? 'цели' : 'точки';
   return `${about} · ${Math.round(lineup.score)} ед. от ${endpoint}`;
@@ -286,7 +293,7 @@ function renderSelection() {
     </div></div>
     <p class="instructions">${safe(lineup.instructions)}</p>
     ${lineup.aimCue ? `<p class="instructions"><strong>Ориентир</strong> ${safe(lineup.aimCue)}</p>` : ''}
-    ${lineup.difficulty ? `<p class="instructions">${safe(difficultyLabels[lineup.difficulty])}${lineup.side ? ` · ${safe(lineup.side)}` : ''}</p>` : ''}
+    ${lineup.difficulty || lineup.side ? `<p class="instructions">${safe([difficultyLabels[lineup.difficulty], lineup.side].filter(Boolean).join(' · '))}</p>` : ''}
     ${command ? `<label class="sr-only" for="command">Команда для консоли CS2</label>
       <textarea class="command" id="command" readonly spellcheck="false" rows="3">${safe(command)}</textarea>`
       : '<p class="instructions">Для этой раскидки пока нет точных данных для команды.</p>'}
@@ -362,7 +369,11 @@ function readLink() {
   if (routeMode === 'start' || routeMode === 'target') {
     const x = Number(params.get('x'));
     const y = Number(params.get('y'));
-    if (params.has('x') && params.has('y') && onMap([x, y])) point = [x, y];
+    if (params.has('x') && params.has('y') && onMap([x, y])) {
+      point = [x, y];
+      get('manual-x').value = x;
+      get('manual-y').value = y;
+    }
     if (params.has('z') && Number.isFinite(Number(params.get('z')))) height = Number(params.get('z'));
     const team = params.get('side');
     if (team === 'T' || team === 'CT') teamFilter.value = team;
@@ -371,9 +382,11 @@ function readLink() {
     const kind = params.get('throw');
     if (Object.hasOwn(techniques, kind)) throwControl.value = kind;
     const linkedShot = params.get('shot');
-    selectedId = byId.has(linkedShot) ? linkedShot : '';
-    changeMode(routeMode, Boolean(linkedShot && !selectedId));
-    if (linkedShot && !byId.has(linkedShot)) notify('Эта раскидка сейчас недоступна.');
+    selectedId = point && (byId.has(linkedShot) || isCalculatedSmokeId(linkedShot)) ? linkedShot : '';
+    const hasInvalidPoint = !point && (params.has('x') || params.has('y'));
+    changeMode(routeMode, Boolean(hasInvalidPoint || (linkedShot && !selectedId)));
+    if (hasInvalidPoint) notify('Выбери точку в игровой зоне Mirage.');
+    else reportUnavailableShot(linkedShot);
     return;
   }
   changeMode('catalog');
@@ -382,7 +395,14 @@ function readLink() {
 function onMap(position) {
   const [x, y] = worldToRadar(position);
   return x >= radarBounds.x && x <= radarBounds.x + radarBounds.width
-    && y >= radarBounds.y && y <= radarBounds.y + radarBounds.height;
+    && y >= radarBounds.y && y <= radarBounds.y + radarBounds.height
+    && isPlayableMiragePoint(position);
+}
+
+function reportUnavailableShot(requestedId) {
+  if (!requestedId || calculationsLoading || calculationsFailed || visible.some((lineup) => lineup.id === requestedId)) return;
+  history.replaceState(null, '', lineupUrl(''));
+  notify('Эта раскидка сейчас недоступна.');
 }
 
 function renderPin() {
@@ -427,29 +447,53 @@ function renderMode() {
   if (isCatalog) return;
 
   let hint = '';
-  if (mode === 'start' && pointResults?.nearest) {
+  if (point && calculationsLoading) {
+    hint = 'Загружаю расчёты Mirage…';
+  } else if (point && calculationsFailed) {
+    hint = 'Расчёты не загрузились. Повтори выбор точки.';
+  } else if (mode === 'start' && pointResults?.nearest && pointResults.nearestDistance >= 8) {
     const [x, y, z] = pointResults.nearest.map(Math.round);
-    hint = `Ближайший проверенный старт ${x} / ${y} / ${z} · ${Math.round(pointResults.nearestDistance)} ед. от точки`;
+    hint = `Ближайший старт ${x} / ${y} / ${z} · ${Math.round(pointResults.nearestDistance)} ед. от точки`;
   }
   get('point-hint').textContent = hint;
   get('point-hint').hidden = !hint;
   if (point) get('point-coordinates').textContent = `${mode === 'start' ? 'Старт' : 'Цель'} ${point[0]} / ${point[1]}`;
 
   const allHeights = new Set(pointResults?.heights ?? []);
-  if (height !== null) allHeights.add(height);
   heightControl.innerHTML = '<option value="">Выбрать уровень</option>'
-    + [...allHeights].map((entry) => `<option value="${entry}">Около Z ${entry}</option>`).join('');
+    + [...allHeights].map((entry) => `<option value="${entry}">Около Z ${Math.round(entry)}</option>`).join('');
   heightControl.value = height === null ? '' : String(height);
 }
 
-function updatePointSearch({ updateAddress = false } = {}) {
+function updatePointSearch({ updateAddress = false, reloadCalculations = true } = {}) {
+  if (point && reloadCalculations && !calculationsLoading && calculatedSmokes === null) {
+    calculationsLoading = true;
+    calculationsFailed = false;
+    loadCalculatedSmokes().then((smokes) => {
+      calculatedSmokes = smokes;
+    }).catch(() => {
+      calculationsFailed = true;
+    }).finally(() => {
+      calculationsLoading = false;
+      if (mode !== 'catalog' && point) {
+        const requestedId = selectedId;
+        updatePointSearch({ reloadCalculations: false });
+        reportUnavailableShot(requestedId);
+      }
+    });
+  }
   const options = {
     mode, point, height,
     team: teamFilter.value,
     radius: Number(rangeControl.value),
     technique: throwControl.value,
   };
-  pointResults = point ? queryVerifiedSmokes(publicLineups, options) : null;
+  const candidates = calculatedSmokes ?? [];
+  pointResults = point ? queryMirageSmokes(publicLineups, candidates, options) : null;
+  if (pointResults && height !== null && pointResults.selectedHeight === null) {
+    pointResults = queryMirageSmokes(publicLineups, candidates, { ...options, height: null });
+  }
+  height = pointResults?.selectedHeight ?? null;
   visible = pointResults?.matches ?? [];
   renderMode();
   renderResults();
@@ -572,7 +616,7 @@ quickTargets.addEventListener('click', (event) => {
 
 function selectPoint(picked) {
   if (!onMap(picked)) {
-    notify('Эта точка за пределами схемы Mirage.');
+    notify('Выбери точку в игровой зоне Mirage.');
     return;
   }
   point = picked;
@@ -630,10 +674,12 @@ get('restore-overview').addEventListener('click', () => {
 get('previous-results').addEventListener('click', () => {
   resultPage -= 1;
   renderResultPage();
+  renderMarkers(mode === 'catalog');
 });
 get('next-results').addEventListener('click', () => {
   resultPage += 1;
   renderResultPage();
+  renderMarkers(mode === 'catalog');
 });
 get('open-help').addEventListener('click', () => get('help-dialog').showModal());
 mapCommand.addEventListener('click', () => {
